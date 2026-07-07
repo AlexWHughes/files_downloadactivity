@@ -7,6 +7,7 @@
 
 namespace OCA\FilesDownloadActivity\Tests\AppInfo;
 
+use OCA\FilesDownloadActivity\Activity\DownloadEventListener;
 use OCA\FilesDownloadActivity\Activity\Listener;
 use OCA\FilesDownloadActivity\Activity\Provider;
 use OCA\FilesDownloadActivity\Activity\Setting;
@@ -46,6 +47,7 @@ class ApplicationTest extends TestCase {
 			[Provider::class, Provider::class],
 			[Provider::class, IProvider::class],
 			[Listener::class, Listener::class],
+			[DownloadEventListener::class, DownloadEventListener::class],
 		];
 	}
 

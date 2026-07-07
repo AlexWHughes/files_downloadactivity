@@ -8,12 +8,12 @@ declare(strict_types=1);
 
 namespace OCA\FilesDownloadActivity\Activity;
 
-use OC\Files\Filesystem;
 use OCA\FilesDownloadActivity\CurrentUser;
 use OCP\Activity\IManager;
 use OCP\Files\Folder;
 use OCP\Files\InvalidPathException;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 use OCP\IURLGenerator;
@@ -31,12 +31,23 @@ class Listener {
 	}
 
 	/**
-	 * Store the update hook events
-	 * @param string $path Path of the file that has been read
+	 * @param string $path Path of the file that has been read, relative to the user folder
 	 */
 	public function readFile(string $path): void {
-		// Do not add activities for .part-files
-		if (substr($path, -5) === '.part') {
+		if ($this->currentUser->getUID() === null) {
+			return;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($this->currentUser->getUID());
+			$this->readNode($userFolder->get($path));
+		} catch (NotFoundException|InvalidPathException) {
+			return;
+		}
+	}
+
+	public function readNode(Node $node): void {
+		if (str_ends_with($node->getName(), '.part')) {
 			return;
 		}
 
@@ -46,15 +57,12 @@ class Listener {
 		}
 
 		try {
-			[$filePath, $owner, $fileId, $isDir] = $this->getSourcePathAndOwner($path);
-		} catch (NotFoundException $e) {
-			return;
-		} catch (InvalidPathException $e) {
+			[$filePath, $owner, $fileId, $isDir] = $this->resolveNodeForActivity($node);
+		} catch (NotFoundException) {
 			return;
 		}
 
 		if ($this->currentUser->getUID() === $owner) {
-			// Could not find the file for the owner ...
 			return;
 		}
 
@@ -93,29 +101,36 @@ class Listener {
 				->setLink($this->urlGenerator->linkToRouteAbsolute('files.view.index', $linkData));
 			$this->activityManager->publish($event);
 		} catch (\InvalidArgumentException $e) {
-			$this->logger->error($e->getMessage(), $e->getTrace());
+			$this->logger->error($e->getMessage(), ['exception' => $e]);
 		} catch (\BadMethodCallException $e) {
-			$this->logger->error($e->getMessage(), $e->getTrace());
+			$this->logger->error($e->getMessage(), ['exception' => $e]);
 		}
 	}
 
 	/**
-	 * @param string $path
-	 * @return array
+	 * @return array{0: string, 1: string, 2: int, 3: bool}
 	 * @throws NotFoundException
-	 * @throws InvalidPathException
 	 */
-	protected function getSourcePathAndOwner(string $path): array {
+	protected function resolveNodeForActivity(Node $node): array {
 		$currentUserId = $this->currentUser->getUID();
-		$userFolder = $this->rootFolder->getUserFolder($currentUserId);
-		$node = $userFolder->get($path);
-		$owner = $node->getOwner()->getUID();
+		if ($currentUserId === null) {
+			throw new NotFoundException('No logged in user');
+		}
+
+		$ownerUser = $node->getOwner();
+		if ($ownerUser === null) {
+			throw new NotFoundException('Node has no owner');
+		}
+		$owner = $ownerUser->getUID();
 
 		if ($owner !== $currentUserId) {
-			$storage = $node->getStorage();
-			if (!$storage->instanceOfStorage('OCA\Files_Sharing\External\Storage')) {
-				Filesystem::initMountPoints($owner);
-			} else {
+			try {
+				$storage = $node->getStorage();
+			} catch (NotFoundException $e) {
+				throw $e;
+			}
+
+			if ($storage->instanceOfStorage('OCA\Files_Sharing\External\Storage')) {
 				// Probably a remote user, let's try to at least generate activities
 				// for the current user
 				$owner = $currentUserId;
@@ -124,19 +139,22 @@ class Listener {
 			$ownerFolder = $this->rootFolder->getUserFolder($owner);
 			$nodes = $ownerFolder->getById($node->getId());
 
-			if (empty($nodes)) {
+			if ($nodes === []) {
 				throw new NotFoundException($node->getPath());
 			}
 
 			$node = $nodes[0];
 			$path = substr($node->getPath(), strlen($ownerFolder->getPath()));
+		} else {
+			$userFolder = $this->rootFolder->getUserFolder($currentUserId);
+			$path = substr($node->getPath(), strlen($userFolder->getPath()));
 		}
 
 		return [
 			$path,
 			$owner,
 			$node->getId(),
-			$node instanceof Folder
+			$node instanceof Folder,
 		];
 	}
 }

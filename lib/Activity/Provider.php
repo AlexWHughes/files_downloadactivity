@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace OCA\FilesDownloadActivity\Activity;
 
+use OCP\Activity\Exceptions\UnknownActivityException;
 use OCP\Activity\IEvent;
 use OCP\Activity\IEventMerger;
 use OCP\Activity\IManager;
@@ -45,12 +46,12 @@ class Provider implements IProvider {
 	 * @param IEvent $event
 	 * @param IEvent|null $previousEvent
 	 * @return IEvent
-	 * @throws \InvalidArgumentException
+	 * @throws UnknownActivityException
 	 * @since 11.0.0
 	 */
 	public function parse($language, IEvent $event, ?IEvent $previousEvent = null): IEvent {
 		if ($event->getApp() !== 'files_downloadactivity') {
-			throw new \InvalidArgumentException();
+			throw new UnknownActivityException();
 		}
 
 		$this->l = $this->languageFactory->get('files_downloadactivity', $language);
@@ -63,7 +64,7 @@ class Provider implements IProvider {
 		if ($this->activityManager->isFormattingFilteredObject()) {
 			try {
 				return $this->parseShortVersion($event, $previousEvent);
-			} catch (\InvalidArgumentException $e) {
+			} catch (UnknownActivityException) {
 				// Ignore and simply use the long version...
 			}
 		}
@@ -75,7 +76,7 @@ class Provider implements IProvider {
 	 * @param IEvent $event
 	 * @param IEvent|null $previousEvent
 	 * @return IEvent
-	 * @throws \InvalidArgumentException
+	 * @throws UnknownActivityException
 	 * @since 11.0.0
 	 */
 	public function parseShortVersion(IEvent $event, ?IEvent $previousEvent = null): IEvent {
@@ -104,7 +105,7 @@ class Provider implements IProvider {
 	 * @param IEvent $event
 	 * @param IEvent|null $previousEvent
 	 * @return IEvent
-	 * @throws \InvalidArgumentException
+	 * @throws UnknownActivityException
 	 * @since 11.0.0
 	 */
 	public function parseLongVersion(IEvent $event, ?IEvent $previousEvent = null): IEvent {
@@ -138,7 +139,7 @@ class Provider implements IProvider {
 	 * @param IEvent $event
 	 * @param string $subject
 	 * @param array $parameters
-	 * @throws \InvalidArgumentException
+	 * @throws UnknownActivityException
 	 */
 	protected function setSubjects(IEvent $event, string $subject, array $parameters): void {
 		$placeholders = $replacements = [];
@@ -155,6 +156,10 @@ class Provider implements IProvider {
 			->setRichSubject($subject, $parameters);
 	}
 
+	/**
+	 * @return array<string, array<string, mixed>>
+	 * @throws UnknownActivityException
+	 */
 	protected function getParsedParameters(IEvent $event): array {
 		$subject = $event->getSubject();
 		$parameters = $event->getSubjectParameters();
@@ -167,14 +172,13 @@ class Provider implements IProvider {
 					'file' => $this->generateFileParameter((int)$id, $parameters[0][$id]),
 					'actor' => $this->generateUserParameter($parameters[1]),
 				];
+			default:
+				throw new UnknownActivityException();
 		}
-		return [];
 	}
 
 	/**
-	 * @param int $id
-	 * @param string $path
-	 * @return array
+	 * @return array<string, mixed>
 	 */
 	protected function generateFileParameter(int $id, string $path): array {
 		return [
@@ -187,8 +191,7 @@ class Provider implements IProvider {
 	}
 
 	/**
-	 * @param string $uid
-	 * @return array
+	 * @return array<string, mixed>
 	 */
 	protected function generateUserParameter(string $uid): array {
 		if (!isset($this->displayNames[$uid])) {
@@ -202,10 +205,6 @@ class Provider implements IProvider {
 		];
 	}
 
-	/**
-	 * @param string $uid
-	 * @return string
-	 */
 	protected function getDisplayName(string $uid): string {
 		$user = $this->userManager->get($uid);
 		if ($user instanceof IUser) {

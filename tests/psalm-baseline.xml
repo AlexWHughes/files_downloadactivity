@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<files psalm-version="5.25.0@01a8eb06b9e9cc6cfb6a320bf9fb14331919d505">
+<files psalm-version="5.26.1@5343316ca3fe43104a9676ffcc12607cf185300c">
   <file src="lib/Activity/Listener.php">
     <MissingDependency>
       <code><![CDATA[$this->rootFolder]]></code>
       <code><![CDATA[protected]]></code>
+      <code><![CDATA[$ownerFolder = $this->rootFolder->getUserFolder($owner)]]></code>
+      <code><![CDATA[$userFolder = $this->rootFolder->getUserFolder($currentUserId)]]></code>
     </MissingDependency>
     <UndefinedClass>
-      <code><![CDATA[Filesystem]]></code>
+      <code><![CDATA['OCA\Files_Sharing\External\Storage']]></code>
     </UndefinedClass>
   </file>
   <file src="lib/CurrentUser.php">
